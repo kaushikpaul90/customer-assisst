@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "python",
+            "request": "launch",
+            "name": "Run Uvicorn (app.main:app) [recommended]",
+            "module": "uvicorn",
+            "args": [
+                "app.main:app",
+                "--reload",
+                "--port",
+                "8010"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "type": "python",
+            "request": "launch",
+            "name": "Run app_minimal.py",
+            "program": "${workspaceFolder}/app_minimal.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "type": "python",
+            "request": "launch",
+            "name": "Launch app/main.py (direct)",
+            "program": "${workspaceFolder}/app/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

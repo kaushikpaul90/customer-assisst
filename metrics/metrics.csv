@@ -283,3 +283,13 @@ endpoint,latency_ms,answer_len
 /summarize,4483.94,{'summary_len': 362},2025-11-10 22:28:50
 /summarize,3939.34,{'summary_len': 308},2025-11-10 22:33:00
 /translate,12310.43,{'out_len': 433},2025-11-10 22:38:37
+/qa,679.45,{'answer_len': 48},2025-11-10 23:36:32
+/summarize,8096.06,{'summary_len': 308},2025-11-10 23:37:31
+/translate,47633.86,{'out_len': 137},2025-11-10 23:41:32
+/translate,13939.91,{'out_len': 421},2025-11-10 23:42:09
+/qa,682.04,{'answer_len': 48},2025-11-11 01:06:22
+/qa,79.29,{'answer_len': 11},2025-11-11 01:06:51
+/summarize,5517.33,{'summary_len': 308},2025-11-11 01:07:50
+/summarize,4093.79,{'summary_len': 300},2025-11-11 01:08:33
+/translate,11512.06,{'out_len': 427},2025-11-11 01:09:37
+/translate,12305.6,{'out_len': 437},2025-11-11 01:10:14

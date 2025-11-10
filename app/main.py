@@ -62,37 +62,6 @@ async def summarize(req: TextReq):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/explain")
-async def explain(req: ExplainReq):
-    """Topic Explanation Endpoint"""
-    try:
-        start = timeit()
-        out = explain_topic(req.topic, style=req.style)
-        latency = (timeit() - start) * 1000
-        record_metric("/explain", latency, {"out_len": len(out)})
-        
-        return {'explanation': out}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/upload-image")
-async def upload_image(file: UploadFile = File(...)):
-    """OCR + Image Classification Endpoint"""
-    try:
-        start = timeit()
-        img_bytes = await file.read()
-        ocr = ocr_image_bytes(img_bytes)
-        s = summarize_text(ocr["text"])
-        labels = classify_image_bytes(img_bytes)
-        latency = (timeit() - start) * 1000
-        record_metric("/upload-image", latency, {"ocr_len": len(ocr)})
-        # return {"ocr": ocr, "labels": labels}
-        return {"summary": s, "labels": labels}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post('/translate')
 async def translate(req: TranslateReq):
     """
@@ -146,4 +115,4 @@ async def asr(file: UploadFile = File(...)):
 
 @app.get("/")
 async def root():
-    return {"message": "CustomerAssisst_finetune AI API is running successfully!"}
+    return {"message": "CustomerAssist_finetune AI API is running successfully!"}

@@ -10,28 +10,45 @@ Keep import-time work minimal in production (consider lazy-loading).
 """
 
 import torch
-from transformers import AutoModelForCausalLM, Blip2ForConditionalGeneration, Blip2Processor, CLIPModel, CLIPProcessor, pipeline, AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import CLIPModel, CLIPProcessor, pipeline
 import easyocr
 import numpy as np
 from PIL import Image
 import io
-import cv2
 import re
 import tempfile
 from langdetect import detect
-# from dotenv import load_dotenv
-
 from app.config import (
-    ASR_MODEL, DAMAGE_DETECTOR, QA_MODEL, SUMMARIZER, EXPLAINER,
-    PARAPHRASE_MODEL, TEXT_DAMAGE_CLASSIFIER, TRANSLATOR, IMG_CLASSIFIER,
-    IMAGE_CAPTION, OCR_LANGS, DEVICE
+    QA_MODEL,
+    SUMMARIZER,
+    EXPLAINER,
+    TRANSLATOR,
+    IMG_CLASSIFIER,
+    IMAGE_CAPTION,
+    ASR_MODEL,
+    DEFECT_DETECTOR,
+    OCR_LANGS,
+    DEVICE,
+    TASK_QA,
+    TASK_SUMMARIZATION,
+    TASK_TEXT_GENERATION,
+    TASK_IMAGE_CLASSIFICATION,
+    TASK_IMAGE_CAPTION,
+    TASK_ASR,
+    QA_PIPELINE_KWARGS,
+    SUMMARIZER_PIPELINE_KWARGS,
+    EXPLAINER_PIPELINE_KWARGS,
+    IMG_CLASSIFIER_PIPELINE_KWARGS,
+    IMAGE_CAPTIONER_PIPELINE_KWARGS,
+    ASR_PIPELINE_KWARGS,
 )
 
-# Load environment variables from .env file
-# load_dotenv()
+# ==============================================================================
+# 1. NLP PIPELINES & FUNCTIONS
+# ==============================================================================
 
 # ----------------------------
-# Initialize NLP Pipelines
+# NLP Pipeline Initialization
 # ----------------------------
 # The pipelines below are created at import time for convenience. They
 # are convenient for a demo, but they are heavyweight: model downloads,
@@ -39,72 +56,34 @@ from app.config import (
 # import. For production or tests consider lazy factories (functions that
 # create pipelines on first call) to speed up cold-starts and reduce
 # resource usage in environments that only run limited endpoints.
-# QA
+
+# QA Pipeline
 qa_pipeline = pipeline(
-    "question-answering",
+    TASK_QA,
     model=QA_MODEL,
     tokenizer=QA_MODEL,
-    device=0 if DEVICE == "cuda" else -1
+    **QA_PIPELINE_KWARGS
 )
 
-# Summarization
+# Summarization Pipeline
 summarizer = pipeline(
-    "summarization",
+    TASK_SUMMARIZATION,
     model=SUMMARIZER,
     tokenizer=SUMMARIZER,
-    device=0 if DEVICE == "cuda" else -1
+    **SUMMARIZER_PIPELINE_KWARGS
 )
 
-# Explanation (text2text)
+# Text Generation Pipeline (Explanation)
 explainer = pipeline(
-    "text-generation",
+    TASK_TEXT_GENERATION,
     model=EXPLAINER,
-    model_kwargs={"torch_dtype": torch.bfloat16},
-    device_map="auto"
+    **EXPLAINER_PIPELINE_KWARGS
 )
 
 # ----------------------------
-# Initialize CV Pipelines
+# NLP Helper Functions
 # ----------------------------
-# Image classification (cached)
-img_classifier = pipeline(
-    "image-classification",
-    model=IMG_CLASSIFIER,
-    device=0 if DEVICE == "cuda" else -1
-)
 
-# Image captioning (BLIP)
-image_captioner = pipeline(
-    "image-to-text",
-    model=IMAGE_CAPTION,
-    device=0 if DEVICE == "cuda" else -1
-)
-
-damage_detector = pipeline(
-    "image-classification",
-    model=DAMAGE_DETECTOR,
-    device=0 if DEVICE == "cuda" else -1
-)
-
-damage_text_classifier = pipeline(
-    "text-classification",
-    model=TEXT_DAMAGE_CLASSIFIER,
-    device=0 if DEVICE == "cuda" else -1
-)
-
-# ----------------------------
-# Initialize ASR Pipelines
-# ----------------------------
-asr_pipeline = pipeline("automatic-speech-recognition", model=ASR_MODEL, return_timestamps=True, device=-1)
-
-
-use_gpu = torch.backends.mps.is_available()
-# OCR reader (easyocr)
-reader = easyocr.Reader(OCR_LANGS, gpu=use_gpu)
-
-# ----------------------------
-# Helpers
-# ----------------------------
 def split_text(text, max_words=300):
     """Yield successive chunks of text limited by `max_words`.
 
@@ -123,35 +102,7 @@ def split_text(text, max_words=300):
     for i in range(0, len(words), max_words):
         yield " ".join(words[i:i + max_words])
 
-# Basic image preprocessing for OCR
-def preprocess_image_for_ocr(image_bytes: bytes):
-    """Basic image preprocessing for OCR pipelines.
 
-    Converts raw image bytes to a NumPy array in RGB format which
-    `easyocr.Reader` can consume. This function intentionally keeps the
-    transformations small (no binarization or heavy denoising) to be
-    robust across many input images. If you need more aggressive
-    preprocessing (e.g. thresholding) move that logic into a separate
-    preprocessing pipeline and test on sample inputs.
-
-    Args:
-        image_bytes: Raw bytes of the uploaded image file.
-
-    Returns:
-        np.ndarray: RGB image as a NumPy array.
-    """
-
-    image_stream = io.BytesIO(image_bytes)
-    image = Image.open(image_stream)
-
-    # Convert to RGB if not already (handles RGBA, CMYK, etc.)
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-
-    image_np = np.array(image)
-    return image_np
-
-# Simple text cleanup
 def clean_text(t: str) -> str:
     """Normalize and trim whitespace in model-generated text.
 
@@ -164,16 +115,7 @@ def clean_text(t: str) -> str:
     t = re.sub(r'\s+', ' ', t)
     return t
 
-def contains_damage_keywords(text: str) -> bool:
-    """
-    Common helper to check if text contains any damage-related keywords.
-    """
-    damage_keywords = ["broken", "damaged", "defect", "cracked", "torn", "scratched"]
-    return any(k in text.lower() for k in damage_keywords)
 
-# ----------------------------
-# NLP Tasks
-# ----------------------------
 def answer_question(context: str, question: str):
     """Answer a question using the QA pipeline over possibly-long context.
 
@@ -201,6 +143,7 @@ def answer_question(context: str, question: str):
         return {"question": question, "answer": ""}
     final_answer = max(set(answers), key=answers.count)
     return {"question": question, "answer": final_answer}
+
 
 def summarize_text(text: str):
     """Summarize a customer service conversation or long text.
@@ -235,6 +178,7 @@ def summarize_text(text: str):
     summary = result[0]["summary_text"]
     return summary
 
+
 def explain_topic(topic: str, style: str = "detailed"):
     """Return a concise explanation of `topic`.
 
@@ -266,10 +210,17 @@ def explain_topic(topic: str, style: str = "detailed"):
     explanation = clean_text(explanation.replace(prompt, ""))
     return explanation
 
+
 def translate_text(text: str, src_lang: str, target_lang: str):
-    """
-    Translate input text to target language.
-    target_lang: language code, e.g., 'fr' for French, 'de' for German.
+    """Translate input text to target language.
+
+    Args:
+        text: The input text to translate.
+        src_lang: Source language code (e.g., 'eng_Latn' for English).
+        target_lang: Target language code (e.g., 'hin_Deva' for Hindi).
+
+    Returns:
+        str: Translated and cleaned text.
     """
 
     translator = pipeline(
@@ -285,9 +236,65 @@ def translate_text(text: str, src_lang: str, target_lang: str):
     res = out[0].get("translation_text") or out[0].get("text") or ""
     return clean_text(res)
 
+
+# ==============================================================================
+# 2. COMPUTER VISION PIPELINES & FUNCTIONS
+# ==============================================================================
+
 # ----------------------------
-# Computer Vision Tasks
+# Computer Vision Pipeline Initialization
 # ----------------------------
+
+# Image Classification Pipeline
+img_classifier = pipeline(
+    TASK_IMAGE_CLASSIFICATION,
+    model=IMG_CLASSIFIER,
+    **IMG_CLASSIFIER_PIPELINE_KWARGS
+)
+
+# Image Captioning Pipeline (BLIP)
+image_captioner = pipeline(
+    TASK_IMAGE_CAPTION,
+    model=IMAGE_CAPTION,
+    **IMAGE_CAPTIONER_PIPELINE_KWARGS
+)
+
+# OCR Reader (easyocr)
+use_gpu = torch.backends.mps.is_available()
+reader = easyocr.Reader(OCR_LANGS, gpu=use_gpu)
+
+# ----------------------------
+# Computer Vision Helper Functions
+# ----------------------------
+
+def preprocess_image_for_ocr(image_bytes: bytes):
+    """Basic image preprocessing for OCR pipelines.
+
+    Converts raw image bytes to a NumPy array in RGB format which
+    `easyocr.Reader` can consume. This function intentionally keeps the
+    transformations small (no binarization or heavy denoising) to be
+    robust across many input images. If you need more aggressive
+    preprocessing (e.g. thresholding) move that logic into a separate
+    preprocessing pipeline and test on sample inputs.
+
+    Args:
+        image_bytes: Raw bytes of the uploaded image file.
+
+    Returns:
+        np.ndarray: RGB image as a NumPy array.
+    """
+
+    image_stream = io.BytesIO(image_bytes)
+    image = Image.open(image_stream)
+
+    # Convert to RGB if not already (handles RGBA, CMYK, etc.)
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    image_np = np.array(image)
+    return image_np
+
+
 def ocr_image_bytes(image_bytes: bytes):
     """Run OCR on image bytes and return combined plain text.
 
@@ -307,12 +314,19 @@ def ocr_image_bytes(image_bytes: bytes):
     combined = re.sub(r"[^A-Za-z0-9.,;:!?'\s]", "", combined)
     return {"text": combined if combined else "No English text detected."}
 
+
 def classify_image_bytes(image_bytes: bytes):
     """Return top-3 image classification predictions.
 
     The function uses a pre-initialized `img_classifier` pipeline and
     returns the top 3 labels with scores as floats for JSON
     serialization.
+
+    Args:
+        image_bytes: Raw image bytes.
+
+    Returns:
+        dict: {'predictions': [{'label': str, 'score': float}, ...]}
     """
 
     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -321,29 +335,26 @@ def classify_image_bytes(image_bytes: bytes):
     formatted = [{"label": p["label"], "score": float(p["score"])} for p in top3]
     return {"predictions": formatted}
 
-def image_caption_bytes(image_bytes: bytes):
-    """
-    Produce a short caption describing the image.
-    Uses BLIP (Salesforce/blip-image-captioning-base) model via pipeline 'image-to-text'.
-    """
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    out = image_captioner(image, max_new_tokens=512)
-    caption = out[0].get("generated_text") or out[0].get("caption") or ""
-    caption = clean_text(caption)
-    return {"caption": caption}
 
-# -------------------------------------------------------------
-# 1️⃣ Zero-shot Defect Detection using CLIP/SigLIP
-# -------------------------------------------------------------
 def detect_defect(image_bytes: bytes,
-                  model_id: str = "openai/clip-vit-large-patch14",
+                  model_id: str = DEFECT_DETECTOR,
                   diff_margin: float = 0.05,
                   top_threshold: float = 0.25
     ) -> dict:
-    """
-    Adaptive hybrid CLIP-based defect detector.
+    """Adaptive hybrid CLIP-based defect detector.
+
     Compares average group probabilities and top defective label confidence
-    without relying on hard absolute thresholds.
+    without relying on hard absolute thresholds. Uses zero-shot classification
+    to detect product defects without fine-tuning.
+
+    Args:
+        image_bytes: Raw image bytes to analyze.
+        model_id: CLIP model identifier.
+        diff_margin: Margin for difference between defective and good scores.
+        top_threshold: Confidence threshold for top defective label.
+
+    Returns:
+        dict: {'is_defective': bool, 'confidence': float}
     """
 
     # Load model & processor
@@ -379,7 +390,6 @@ def detect_defect(image_bytes: bytes,
         "a crushed or warped product",
         "a product with visible loose threads",
         "a product with frayed seams",
-        # "a product with loose stitching",
         "a product with holes or rips"
     ]
 
@@ -407,10 +417,6 @@ def detect_defect(image_bytes: bytes,
     # Adaptive decision logic
     diff = avg_def - avg_good
 
-    # # 7️⃣ Find top label and probability
-    # top_label = max(result, key=result.get)
-    # top_prob = result[top_label]
-
     # Decision logic
     is_defective = False
 
@@ -428,49 +434,33 @@ def detect_defect(image_bytes: bytes,
 
     return {
         "is_defective": is_defective,
-        # "predicted_label": top_def_label,
         "confidence": float(top_def_prob),
-        # "diff": float(diff),
-        # "avg_def": float(avg_def),
-        # "avg_good": float(avg_good)
     }
 
-# -------------------------------------------------------------
-# 2️⃣ Optional: Defect Explanation using BLIP-2
-# -------------------------------------------------------------
-def explain_defect(image_bytes: bytes,
-                   model_id: str = "Salesforce/blip2-flan-t5-xl",
-                   max_tokens: int = 60) -> str:
-    """
-    Generates a natural-language description of any visible defect.
+# ==============================================================================
+# 3. AUDIO & SPEECH RECOGNITION PIPELINES & FUNCTIONS
+# ==============================================================================
 
-    Args:
-        image_path: Path to the uploaded image.
-        model_id: BLIP-2 model identifier.
-        max_tokens: Max length of the explanation.
+# ----------------------------
+# Audio Pipeline Initialization
+# ----------------------------
 
-    Returns:
-        str: Textual description of the defect.
-    """
-    
-    device = "mps" if torch.mps.is_available() else "cpu"
+# Automatic Speech Recognition Pipeline (Whisper)
+asr_pipeline = pipeline(TASK_ASR, model=ASR_MODEL, **ASR_PIPELINE_KWARGS)
 
-    processor = Blip2Processor.from_pretrained(model_id)
-    model = Blip2ForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch.float16).to(device)
-
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    prompt = "Mention any visible defects or damages in this product image."
-
-    inputs = processor(image, prompt, return_tensors="pt").to(device)
-    output = model.generate(**inputs, max_new_tokens=max_tokens)
-    caption = processor.decode(output[0], skip_special_tokens=True)
-
-    return caption
-
-# --- Speech Recognition Task ---
+# ----------------------------
+# Audio Helper Functions
+# ----------------------------
 
 def transcribe_audio(audio_bytes: bytes):
-    """Convert spoken audio to text using Whisper model."""
+    """Convert spoken audio to text using Whisper model.
+
+    Args:
+        audio_bytes: Raw audio file bytes (WAV, MP3, etc.).
+
+    Returns:
+        dict: {'transcription': str} containing the recognized speech text.
+    """
     # Save to temporary WAV for pipeline compatibility
     with tempfile.NamedTemporaryFile() as tmp:
         tmp.write(audio_bytes)
@@ -479,15 +469,18 @@ def transcribe_audio(audio_bytes: bytes):
     return {"transcription": result["text"]}
 
 
-def transcribe_and_translate_audio(audio_bytes: bytes):
-    """Convert spoken audio to text using Whisper model and translate to English text."""
-    transcribed_text = transcribe_audio(audio_bytes)
-    src_lang, target_lang = detect_source_target_language(transcribed_text["transcription"])
-    translated_text = translate_text(text=transcribed_text["transcription"], src_lang=src_lang, target_lang=target_lang)
-    return translated_text
-
 def detect_source_target_language(transcribed_text: str):
-    """Detect the source and target language of the spoken audio."""
+    """Detect the source and target language of the spoken audio.
+
+    Uses langdetect to identify the language of transcribed text,
+    then maps it to translation language codes.
+
+    Args:
+        transcribed_text: The transcribed text to analyze.
+
+    Returns:
+        tuple: (src_lang, target_lang) as NLLB-200 language codes.
+    """
     transcribed_language_code = detect(transcribed_text)
     if transcribed_language_code == 'hi':
         src_lang = 'hin_Deva'
@@ -496,3 +489,21 @@ def detect_source_target_language(transcribed_text: str):
         src_lang = 'eng_Latn'
         target_lang = 'hin_Deva'
     return src_lang, target_lang
+
+
+def transcribe_and_translate_audio(audio_bytes: bytes):
+    """Convert spoken audio to text and translate to target language.
+
+    First transcribes audio to text using Whisper, detects the source
+    language, then translates to the target language.
+
+    Args:
+        audio_bytes: Raw audio file bytes.
+
+    Returns:
+        str: Translated text.
+    """
+    transcribed_text = transcribe_audio(audio_bytes)
+    src_lang, target_lang = detect_source_target_language(transcribed_text["transcription"])
+    translated_text = translate_text(text=transcribed_text["transcription"], src_lang=src_lang, target_lang=target_lang)
+    return translated_text

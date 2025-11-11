@@ -7,19 +7,62 @@ Paths) so callers can import them without triggering heavy work.
 
 import torch
 
+# --- LLMOPS: Simple Model Registry ---
+# Define a dictionary for each model family to manage versions.
+# The 'active' key determines the currently used model version.
+
+MODEL_REGISTRY = {
+    "qa_model": {
+        "v1": "deepset/roberta-base-squad2",
+        "active": "v1"
+    },
+    "summarizer": {
+        "v1": "philschmid/bart-large-cnn-samsum",
+        "active": "v1"
+    },
+    "translator": {
+        "v1": "facebook/nllb-200-distilled-600M",
+        "active": "v1"
+    },
+    "img_classifier": {
+        "v1": "google/vit-base-patch16-224",
+        "active": "v1"
+    },
+    "image_caption": {
+        "v1": "Salesforce/blip-image-captioning-base",
+        "active": "v1"
+    },
+    "defect_detector": {
+        "v1": "openai/clip-vit-large-patch14",
+        "active": "v1"
+    },
+    "asr_model": {
+        "v1": "openai/whisper-medium",
+        "active": "v1"
+    }
+}
+
+# Helper function to get the currently active model ID
+def get_model_id(model_key: str) -> str:
+    """Returns the Hugging Face ID for the active version of a model."""
+    registry = MODEL_REGISTRY.get(model_key)
+    if not registry:
+        raise ValueError(f"Model key '{model_key}' not found in registry.")
+    version = registry['active']
+    return registry[version]
+
 # Models (Hugging Face names) -------------------------------------------------
-QA_MODEL = "deepset/roberta-base-squad2"
-SUMMARIZER = "philschmid/bart-large-cnn-samsum"
-EXPLAINER = "google/flan-t5-large"
-TRANSLATOR = "facebook/nllb-200-distilled-600M"
+QA_MODEL = get_model_id("qa_model")
+SUMMARIZER = get_model_id("summarizer")
+TRANSLATOR = get_model_id("translator")
 
 # Image models
-IMG_CLASSIFIER = "google/vit-base-patch16-224"
-IMAGE_CAPTION = "Salesforce/blip-image-captioning-base"
-DEFECT_DETECTOR = "openai/clip-vit-large-patch14"
+IMG_CLASSIFIER = get_model_id("img_classifier")
+IMAGE_CAPTION = get_model_id("image_caption")
+DEFECT_DETECTOR = get_model_id("defect_detector")
 
 # ASR (Whisper style model id)
-ASR_MODEL = "openai/whisper-medium"
+ASR_MODEL = get_model_id("asr_model")
 
 # OCR languages (easyocr)
 OCR_LANGS = ["en"]
@@ -36,6 +79,7 @@ TASK_SUMMARIZATION = "summarization"
 TASK_TEXT_GENERATION = "text-generation"
 TASK_IMAGE_CLASSIFICATION = "image-classification"
 TASK_IMAGE_CAPTION = "image-to-text"
+TASK_TRANSLATION = "translation"
 TASK_ASR = "automatic-speech-recognition"
 
 # ----------------------------
@@ -55,11 +99,6 @@ QA_PIPELINE_KWARGS = {
 
 SUMMARIZER_PIPELINE_KWARGS = {
     "device": DEVICE_ID
-}
-
-EXPLAINER_PIPELINE_KWARGS = {
-    "model_kwargs": {"torch_dtype": torch.bfloat16},
-    "device_map": DEVICE_MAP
 }
 
 IMG_CLASSIFIER_PIPELINE_KWARGS = {

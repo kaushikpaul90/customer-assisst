@@ -3,7 +3,7 @@
 This package contains a minimal API demonstrating an customer service focused AI assistant.
 
 ## What's included
-- FastAPI server with endpoints: /question-answering, /summarize-text, /translate-text, /image/check-return-eligibility, /audio/transcribe, /audio/transcribe-translate
+- FastAPI server with endpoints: /question-answering, /summarize-text, /translate-text, /check-item-return-eligibility, /audio/transcribe, /audio/transcribe-translate
 - Lightweight model wrappers using Hugging Face pipelines
 - Fine-tune and evaluation scripts for QA (SQuAD subset)
 
@@ -62,7 +62,7 @@ This package contains a minimal API demonstrating an customer service focused AI
          calling the translation pipeline.
       - Returns: {"translation": "..."}
 
-   - POST /image/check-return-eligibility
+   - POST /check-item-return-eligibility
       - Upload: form field `file` (image)
       - Runs defect detection and returns `{ "detection": {...}, "eligibility": "eligible|not_eligible" }`
 
@@ -144,7 +144,7 @@ This package contains a minimal API demonstrating an customer service focused AI
        calling the translation pipeline.
      - Returns: {"translation": "..."}
 
-   - POST /image/check-return-eligibility
+   - POST /check-item-return-eligibility
      - Upload: form field `file` (image)
      - Runs defect detection and returns `{ "detection": {...}, "eligibility": "eligible|not_eligible" }`
 
@@ -226,7 +226,7 @@ This package contains a minimal API demonstrating an customer service focused AI
      calling the translation pipeline.
     - Returns: {"translation": "..."}
 
-  - POST /image/check-return-eligibility
+  - POST /check-item-return-eligibility
     - Upload: form field `file` (image)
     - Runs defect detection and returns `{ "detection": {...}, "eligibility": "eligible|not_eligible" }`
 
@@ -308,7 +308,7 @@ This package contains a minimal API demonstrating an customer service focused AI
      calling the translation pipeline.
     - Returns: {"translation": "..."}
 
-  - POST /image/check-return-eligibility
+  - POST /check-item-return-eligibility
     - Upload: form field `file` (image)
     - Runs defect detection and returns `{ "detection": {...}, "eligibility": "eligible|not_eligible" }`
 
@@ -390,7 +390,7 @@ This package contains a minimal API demonstrating an customer service focused AI
      calling the translation pipeline.
     - Returns: {"translation": "..."}
 
-  - POST /image/check-return-eligibility
+  - POST /check-item-return-eligibility
     - Upload: form field `file` (image)
     - Runs defect detection and returns `{ "detection": {...}, "eligibility": "eligible|not_eligible" }`
 
@@ -435,7 +435,7 @@ This package contains a minimal API demonstrating an customer service focused AI
 
   Check item return eligibility (image):
   ```bash
-  curl -s -X POST "http://127.0.0.1:8010/image/check-return-eligibility" \
+  curl -s -X POST "http://127.0.0.1:8010/check-item-return-eligibility" \
     -F "file=@/path/to/photo.jpg"
   ```
 

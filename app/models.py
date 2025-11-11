@@ -21,7 +21,6 @@ from langdetect import detect
 from app.config import (
     QA_MODEL,
     SUMMARIZER,
-    EXPLAINER,
     TRANSLATOR,
     IMG_CLASSIFIER,
     IMAGE_CAPTION,
@@ -34,10 +33,10 @@ from app.config import (
     TASK_TEXT_GENERATION,
     TASK_IMAGE_CLASSIFICATION,
     TASK_IMAGE_CAPTION,
+    TASK_TRANSLATION,
     TASK_ASR,
     QA_PIPELINE_KWARGS,
     SUMMARIZER_PIPELINE_KWARGS,
-    EXPLAINER_PIPELINE_KWARGS,
     IMG_CLASSIFIER_PIPELINE_KWARGS,
     IMAGE_CAPTIONER_PIPELINE_KWARGS,
     ASR_PIPELINE_KWARGS,
@@ -71,13 +70,6 @@ summarizer = pipeline(
     model=SUMMARIZER,
     tokenizer=SUMMARIZER,
     **SUMMARIZER_PIPELINE_KWARGS
-)
-
-# Text Generation Pipeline (Explanation)
-explainer = pipeline(
-    TASK_TEXT_GENERATION,
-    model=EXPLAINER,
-    **EXPLAINER_PIPELINE_KWARGS
 )
 
 # ----------------------------
@@ -176,39 +168,7 @@ def summarize_text(text: str):
     )
 
     summary = result[0]["summary_text"]
-    return summary
-
-
-def explain_topic(topic: str, style: str = "detailed"):
-    """Return a concise explanation of `topic`.
-
-    Args:
-        topic: The subject to explain.
-        style: A non-strict hint for the explanation style (e.g.
-            'detailed' or 'step-by-step'). Currently the value is passed
-            through but not used to change the prompt substantially.
-
-    Returns:
-        str: Cleaned explanation text.
-    """
-
-    prompt = (
-        f"Explain the topic '{topic}' in five to six sentences. "
-        f"Include what it is, how it works, and why it matters. "
-        f"Use multiple complete sentences and examples if possible."
-    )
-    
-    out = explainer(
-        prompt,
-        max_new_tokens=512,
-        temperature=0.7,
-        top_p=0.9,
-        do_sample=True,
-        repetition_penalty=1.5
-    )
-    explanation = out[0].get("generated_text") or out[0].get("text") or ""
-    explanation = clean_text(explanation.replace(prompt, ""))
-    return explanation
+    return summary, prompt
 
 
 def translate_text(text: str, src_lang: str, target_lang: str):
@@ -224,7 +184,7 @@ def translate_text(text: str, src_lang: str, target_lang: str):
     """
 
     translator = pipeline(
-        "translation",
+        TASK_TRANSLATION,
         model=TRANSLATOR,
         tokenizer=TRANSLATOR,
         src_lang=src_lang,
@@ -234,7 +194,7 @@ def translate_text(text: str, src_lang: str, target_lang: str):
     prompt = f"{text}"
     out = translator(prompt, max_length=512, do_sample=True)
     res = out[0].get("translation_text") or out[0].get("text") or ""
-    return clean_text(res)
+    return clean_text(res), prompt
 
 
 # ==============================================================================
@@ -435,7 +395,7 @@ def detect_defect(image_bytes: bytes,
     return {
         "is_defective": is_defective,
         "predicted_label": top_def_label,
-        "eligible_for_return": not is_defective
+        "eligible_for_return": is_defective
     }
 
 # ==============================================================================
@@ -506,5 +466,5 @@ def transcribe_and_translate_audio(audio_bytes: bytes):
     """
     transcribed_text = transcribe_audio(audio_bytes)
     src_lang, target_lang = detect_source_target_language(transcribed_text["transcription"])
-    translated_text = translate_text(text=transcribed_text["transcription"], src_lang=src_lang, target_lang=target_lang)
+    translated_text, _ = translate_text(text=transcribed_text["transcription"], src_lang=src_lang, target_lang=target_lang)
     return translated_text

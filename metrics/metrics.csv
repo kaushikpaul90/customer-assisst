@@ -7,3 +7,8 @@ endpoint,latency_ms,metadata,timestamp
 /audio-transcribe,35869.25,{'transcription_len': 119},2025-11-11 18:34:50
 /audio-transcribe-translate,47790.68,{'translation_len': 94},2025-11-11 18:38:16
 /check-item-return-eligibility,6556.6,"{'eligible': True, 'predicted_label': 'a broken product'}",2025-11-11 18:46:36
+/question-answering,726.2,{'answer_len': 48},2025-11-11 19:49:15
+/summarize-text,4196.23,{'summary_len': 308},2025-11-11 19:49:50
+/translate-text,12180.75,{'out_len': 421},2025-11-11 19:50:20
+/check-item-return-eligibility,7459.19,"{'eligible': True, 'predicted_label': 'a broken product'}",2025-11-11 19:50:33
+/audio-transcribe,35311.14,{'transcription_len': 119},2025-11-11 19:51:25

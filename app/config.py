@@ -51,6 +51,37 @@ def get_model_id(model_key: str) -> str:
     version = registry['active']
     return registry[version]
 
+# --- LLMOPS: Prompt Registry (New) ---
+PROMPT_REGISTRY = {
+    "summarizer_prompt": {
+        "v1": (
+            "Summarize the following customer service conversation. "
+            "Focus on the customer's issue, agent's response, resolution offered, and any constraints mentioned:\n\n"
+        ),
+        "v2": (
+            "Provide a concise, neutral summary of the key events, customer intent, and final resolution. "
+            "Use bullet points for clarity:\n\n"
+        ),
+        "active": "v1" # This is the version currently in use
+    },
+    "translator_prompt": {
+        "v1": "{text}", # Simple wrapper prompt
+        "active": "v1"
+    }
+}
+
+# Helper function to get the currently active prompt template (New)
+def get_prompt_template(prompt_key: str) -> tuple[str, str]:
+    """
+    Returns the active prompt template string and its version.
+    Returns: (template_string, version_string)
+    """
+    registry = PROMPT_REGISTRY.get(prompt_key)
+    if not registry:
+        raise ValueError(f"Prompt key '{prompt_key}' not found in registry.")
+    version = registry['active']
+    return registry[version], version
+
 # Models (Hugging Face names) -------------------------------------------------
 QA_MODEL = get_model_id("qa_model")
 SUMMARIZER = get_model_id("summarizer")

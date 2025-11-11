@@ -40,6 +40,7 @@ from app.config import (
     IMG_CLASSIFIER_PIPELINE_KWARGS,
     IMAGE_CAPTIONER_PIPELINE_KWARGS,
     ASR_PIPELINE_KWARGS,
+    get_prompt_template
 )
 
 # ==============================================================================
@@ -148,15 +149,14 @@ def summarize_text(text: str):
         text: The input text to summarize.
 
     Returns:
-        str: The generated summary.
+        tuple: (generated_summary_str, full_prompt_str, prompt_version_str)
     """
 
+    # LLMOPS: Fetch the active prompt template and version
+    template, version = get_prompt_template("summarizer_prompt")
+
     # Structured prompt to guide the model
-    prompt = (
-        "Summarize the following customer service conversation. "
-        "Focus on the customer's issue, agent's response, resolution offered, and any constraints mentioned:\n\n"
-        + text.strip()
-    )
+    prompt = template + text.strip()
 
     # Generate summary with deterministic decoding
     result = summarizer(
@@ -168,7 +168,7 @@ def summarize_text(text: str):
     )
 
     summary = result[0]["summary_text"]
-    return summary, prompt
+    return summary, prompt, version # LLMOPS: Return prompt and version
 
 
 def translate_text(text: str, src_lang: str, target_lang: str):
@@ -180,9 +180,12 @@ def translate_text(text: str, src_lang: str, target_lang: str):
         target_lang: Target language code (e.g., 'hin_Deva' for Hindi).
 
     Returns:
-        str: Translated and cleaned text.
+        tuple: (translated_text_str, full_prompt_str, prompt_version_str)
     """
 
+    # LLMOPS: Fetch the active prompt template and version
+    template, version = get_prompt_template("translator_prompt")
+    
     translator = pipeline(
         TASK_TRANSLATION,
         model=TRANSLATOR,
@@ -191,11 +194,11 @@ def translate_text(text: str, src_lang: str, target_lang: str):
         tgt_lang=target_lang,
         device=0 if DEVICE == "cuda" else -1
     )
-    prompt = f"{text}"
+    # The prompt for translation is just the input text itself using v1 template
+    prompt = template.format(text=text)
     out = translator(prompt, max_length=512, do_sample=True)
     res = out[0].get("translation_text") or out[0].get("text") or ""
-    return clean_text(res), prompt
-
+    return clean_text(res), prompt, version # LLMOPS: Return prompt and version
 
 # ==============================================================================
 # 2. COMPUTER VISION PIPELINES & FUNCTIONS

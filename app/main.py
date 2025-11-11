@@ -1,4 +1,5 @@
-"""REST API surface for Customer Assist.
+"""
+REST API surface for Customer Assist.
 
 This module defines the FastAPI application and the public endpoints
 used by the demo. Endpoints are thin wrappers that call into
@@ -16,7 +17,20 @@ from app.models import (
 )
 from app.utils import timeit, record_metric
 
+# Try to include llmops router if available (non-intrusive).
+# If llmops is not present, app still works exactly the same.
+try:
+    from app.llmops import create_router as _create_llmops_router
+    _llmops_router = _create_llmops_router()
+except Exception:
+    _llmops_router = None
+
 app = FastAPI(title="Customer Assist AI", description="AI-powered Customer Service Assistant", version="1.0")
+
+# mount llmops router if available
+if _llmops_router is not None:
+    app.include_router(_llmops_router)
+
 
 # Request models
 class QAReq(BaseModel):
@@ -42,9 +56,18 @@ async def question_answering(req: QAReq):
         start = timeit()
         out = answer_question(req.context, req.question)
         latency = (timeit() - start) * 1000
-        record_metric("/question-answering", latency, {"answer_len": len(out.get("answer", ""))})
+        # record answer length (if available) and success
+        try:
+            record_metric("/question-answering", latency, {"success": True, "answer_len": len(out.get("answer", ""))})
+        except Exception:
+            pass
         return out
     except Exception as e:
+        # record failure best-effort
+        try:
+            record_metric("/question-answering", 0.0, {"success": False, "error": str(e)})
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -55,10 +78,18 @@ async def summarize_text_endpoint(req: TextReq):
         start = timeit()
         s = summarize_text(req.text)
         latency = (timeit() - start) * 1000
-        record_metric("/summarize-text", latency, {"summary_len": len(s)})
+        try:
+            record_metric("/summarize-text", latency, {"success": True, "summary_len": len(s)})
+        except Exception:
+            pass
         return {"summary": s}
     except Exception as e:
+        try:
+            record_metric("/summarize-text", 0.0, {"success": False, "error": str(e)})
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post('/translate-text')
 async def translate_text_endpoint(req: TranslateReq):
@@ -87,10 +118,18 @@ async def translate_text_endpoint(req: TranslateReq):
         translated_text = translate_text(text=text, src_lang=mapped_src, target_lang=mapped_tgt)
 
         latency = (timeit() - start) * 1000
-        record_metric('/translate-text', latency, {'out_len': len(translated_text)})
+        try:
+            record_metric('/translate-text', latency, {'success': True, 'out_len': len(translated_text)})
+        except Exception:
+            pass
         return {'translation': translated_text}
     except Exception as e:
+        try:
+            record_metric('/translate-text', 0.0, {"success": False, "error": str(e)})
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post('/check-item-return-eligibility')
 async def check_item_return_eligibility(file: UploadFile = File(...)):
@@ -108,32 +147,64 @@ async def check_item_return_eligibility(file: UploadFile = File(...)):
         detection = detect_defect(img_bytes)
         print("🩻 Detection result:", detection)
 
-        # Simple eligibility rule: if defective -> not eligible, else eligible.
-        eligibility = "not_eligible" if detection.get("is_defective") else "eligible"
-
         latency = (timeit() - start) * 1000
-        record_metric('/image/check-return-eligibility', latency, {"eligible": eligibility, "confidence": detection.get("confidence")})
+        try:
+            record_metric('check-item-return-eligibility', latency, {"success": True, "confidence": detection.get("confidence")})
+        except Exception:
+            pass
 
         return {
-            "detection": detection,
-            "eligibility": eligibility,
+            "detection": detection
         }
     except Exception as e:
+        try:
+            record_metric('check-item-return-eligibility', 0.0, {"success": False, "error": str(e)})
+        except Exception:
+            pass
         raise HTTPException(status_code=500, detail=str(e))
     
+
 @app.post("/audio-transcribe")
 async def audio_transcribe(file: UploadFile = File(...)):
     """Transcribe uploaded audio (wav/mp3) to text."""
-    audio_bytes = await file.read()
-    return transcribe_audio(audio_bytes)
+    start = timeit()
+    try:
+        audio_bytes = await file.read()
+        transcription = transcribe_audio(audio_bytes)
+        latency = (timeit() - start) * 1000
+        try:
+            record_metric("/audio-transcribe", latency, {"success": True, "out_len": len(transcription) if isinstance(transcription, str) else 0})
+        except Exception:
+            pass
+        return transcription
+    except Exception as e:
+        try:
+            record_metric("/audio-transcribe", 0.0, {"success": False, "error": str(e)})
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/audio-transcribe-translate")
 async def audio_transcribe_translate(file: UploadFile = File(...)):
     """Transcribe and translate uploaded audio to the target language."""
-    audio_bytes = await file.read()
-    translated_text = transcribe_and_translate_audio(audio_bytes)
-    return {'translation': translated_text}
+    start = timeit()
+    try:
+        audio_bytes = await file.read()
+        translated_text = transcribe_and_translate_audio(audio_bytes)
+        latency = (timeit() - start) * 1000
+        try:
+            record_metric("/audio-transcribe-translate", latency, {"success": True, "out_len": len(translated_text) if isinstance(translated_text, str) else 0})
+        except Exception:
+            pass
+        return {'translation': translated_text}
+    except Exception as e:
+        try:
+            record_metric("/audio-transcribe-translate", 0.0, {"success": False, "error": str(e)})
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/")
 async def root():

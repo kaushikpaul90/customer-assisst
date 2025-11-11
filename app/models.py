@@ -435,7 +435,7 @@ def detect_defect(image_bytes: bytes,
     return {
         "is_defective": is_defective,
         "predicted_label": top_def_label,
-        "eligible_for_return": not is_defective
+        "eligible_for_return": is_defective
     }
 
 # ==============================================================================

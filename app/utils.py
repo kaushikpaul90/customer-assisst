@@ -1,49 +1,62 @@
-"""Small utility helpers used across the demo application.
-
-This module implements tiny helpers for measuring elapsed time and
-recording simple CSV metrics. The implementation is intentionally
-minimal and stores metrics in `metrics/metrics.csv` under the project
-root.
-"""
-
+# app/utils.py
 import time
 import csv
 from pathlib import Path
+import json
+import datetime
+from typing import Dict, Optional, Any
 
-# Ensure metrics folder exists and create file lazily when writing.
-metrics_file = Path("metrics/metrics.csv")
-metrics_file.parent.mkdir(parents=True, exist_ok=True)
+# Metrics storage
+METRICS_DIR = Path("metrics")
+METRICS_DIR.mkdir(parents=True, exist_ok=True)
+METRICS_FILE = METRICS_DIR / "metrics.csv"
+_METRICS_HEADER = ["timestamp", "endpoint", "latency_ms", "model_version", "metadata"]
 
-
-def timeit():
-    """Return current time in seconds since the epoch.
-
-    Simple wrapper used by endpoints to compute latencies. This keeps
-    calls consistent and easy to mock in tests.
+def timeit() -> float:
+    """
+    Simple wrapper returning current epoch seconds (float).
+    Use like:
+        start = timeit()
+        ...
+        latency_ms = (timeit() - start) * 1000
     """
     return time.time()
 
+def _ensure_header():
+    """Ensure metrics CSV has a header row (best-effort)."""
+    if not METRICS_FILE.exists():
+        try:
+            with METRICS_FILE.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(_METRICS_HEADER)
+        except Exception:
+            pass
 
-def record_metric(endpoint, latency, metadata):
-    """Save a single metric row to a CSV file.
-
-    Args:
-        endpoint: Logical name of the endpoint (e.g. '/qa').
-        latency: Latency in milliseconds (float or int).
-        metadata: Arbitrary metadata (will be stringified). Use a
-            dict for structured values.
+def record_metric(
+    endpoint: str,
+    latency_ms: float,
+    metadata: Optional[Dict[str, Any]] = None,
+    model_version: Optional[str] = None,
+):
     """
-    row = {
-        "endpoint": endpoint,
-        "latency_ms": round(latency, 2),
-        "metadata": str(metadata),
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-    }
-    header = ["endpoint", "latency_ms", "metadata", "timestamp"]
+    Append a metric row to metrics/metrics.csv.
 
-    new_file = not metrics_file.exists()
-    with open(metrics_file, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=header)
-        if new_file:
-            writer.writeheader()
-        writer.writerow(row)
+    - endpoint: API route name (e.g. "/summarize-text")
+    - latency_ms: float latency in milliseconds
+    - metadata: optional simple dict (e.g. {"success": True, "summary_len": 123})
+    - model_version: optional string for model identifier
+
+    This function is best-effort and will not raise exceptions.
+    """
+    _ensure_header()
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    md = metadata or {}
+    if model_version:
+        md["model_version"] = model_version
+    try:
+        with METRICS_FILE.open("a", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([ts, endpoint, float(latency_ms), model_version or "", json.dumps(md, ensure_ascii=False)])
+    except Exception:
+        # never fail an endpoint because metric logging failed
+        pass

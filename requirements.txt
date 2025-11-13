@@ -28,3 +28,5 @@ coverage
 pytest
 pytest-cov
 peft
+bitsandbytes
+trl

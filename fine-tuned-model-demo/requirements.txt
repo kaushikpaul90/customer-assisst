@@ -1,0 +1,10 @@
+# File: requirements.txt
+fastapi
+uvicorn[standard]
+torch
+transformers
+datasets
+accelerate
+peft
+bitsandbytes
+trl
